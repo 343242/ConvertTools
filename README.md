@@ -74,9 +74,48 @@ uv run pyinstaller ConvertTools.spec --noconfirm
 
 输出目录：`dist/ConvertTools/ConvertTools.exe`
 
-### 制作安装程序（可选）
+### 制作安装程序（推荐）
 
-使用 [Inno Setup](https://jrsoftware.org/isinfo.php) 或 [NSIS](https://nsis.sourceforge.io/) 将 `dist/ConvertTools/` 目录打包为安装程序：
+可以直接分发 `dist/ConvertTools/` 整个目录，但更推荐在 Windows 上再打一个安装包。
+
+#### 方案 1：NSIS
+
+仓库已提供 NSIS 脚本：[installer.nsi](./installer.nsi)
+
+先确保已经完成 PyInstaller 构建，目录存在：
+
+```text
+dist/ConvertTools/ConvertTools.exe
+```
+
+然后执行：
+
+```bash
+makensis installer.nsi
+```
+
+如果 `makensis` 不在 PATH 里，就用 NSIS 安装目录下的完整路径，例如：
+
+```bash
+"C:\Program Files (x86)\NSIS\makensis.exe" installer.nsi
+```
+
+输出安装包：
+
+```text
+dist/ConvertTools-Setup.exe
+```
+
+安装包默认会：
+
+- 安装到 `C:\Program Files\ConvertTools`
+- 创建开始菜单快捷方式
+- 创建桌面快捷方式
+- 写入卸载程序 `Uninstall.exe`
+
+#### 方案 2：Inno Setup
+
+如果你更习惯 Inno Setup，也可以继续使用 [Inno Setup](https://jrsoftware.org/isinfo.php)：
 
 **Inno Setup 示例** (`installer.iss`)：
 
@@ -102,3 +141,4 @@ Name: "{commondesktop}\ConvertTools"; Filename: "{app}\ConvertTools.exe"
 - 打包已排除：测试代码 (`tests/`)、开发工具 (`pytest`)、`.omc/`、`.claude/`、`.venv/`
 - 预期产物大小：~190MB（主要来自 Qt 运行时）
 - 如需进一步压缩体积，可在 spec 文件 `excludes` 中添加更多不需要的 Qt 模块
+- 分发时不要只拷贝单个 `ConvertTools.exe`，而应分发整个 `dist/ConvertTools/` 目录，或使用上面的安装包
