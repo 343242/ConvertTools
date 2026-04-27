@@ -26,7 +26,7 @@ def sepia(img: Image.Image) -> Image.Image:
     orig_mode = img.mode
     if orig_mode != "RGBA":
         img = img.convert("RGBA")
-    data = list(img.getdata())
+    data = img.get_flattened_data()
     new_data = []
     for r, g, b, a in data:
         tr = min(255, int(r * 0.393 + g * 0.769 + b * 0.189))
