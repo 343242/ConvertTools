@@ -67,10 +67,26 @@ class ImageConverter:
         qimage = qimage.convertToFormat(QImage.Format_RGBA8888)
         width = qimage.width()
         height = qimage.height()
-        ptr = qimage.bits()
-        ptr.setsize(height * width * 4)
-        data = bytes(ptr)
-        return Image.frombytes("RGBA", (width, height), data, "raw", "RGBA", 0, 1)
+        buffer = qimage.bits()
+        size = qimage.sizeInBytes()
+
+        # PySide6 may expose QImage bits as either a shiboken buffer with
+        # setsize() or a standard memoryview. Support both call surfaces.
+        if hasattr(buffer, "setsize"):
+            buffer.setsize(size)
+            data = bytes(buffer)
+        else:
+            data = buffer.tobytes() if hasattr(buffer, "tobytes") else bytes(buffer[:size])
+
+        return Image.frombytes(
+            "RGBA",
+            (width, height),
+            data,
+            "raw",
+            "RGBA",
+            qimage.bytesPerLine(),
+            1,
+        )
 
     @staticmethod
     def _normalize_format(fmt: str) -> str:

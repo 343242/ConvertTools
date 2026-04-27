@@ -2,6 +2,7 @@ import os
 import tempfile
 import pytest
 from PIL import Image
+from PySide6.QtGui import QImage, QColor
 
 import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
@@ -85,6 +86,18 @@ class TestConvert:
             ImageConverter().convert(sample_image, out, {"compress_level": level})
             sizes.append(os.path.getsize(out))
         assert all(s > 0 for s in sizes)
+
+    def test_qimage_export_to_png(self, tmp_dir):
+        out = os.path.join(tmp_dir, "from_qimage.png")
+        qimage = QImage(4, 3, QImage.Format_RGBA8888)
+        qimage.fill(QColor(10, 20, 30, 255))
+
+        ImageConverter().convert_qimage(qimage, out, "PNG")
+
+        result = Image.open(out)
+        assert result.format == "PNG"
+        assert result.size == (4, 3)
+        assert result.getpixel((0, 0)) == (10, 20, 30, 255)
 
 
 class TestOutputPaths:
