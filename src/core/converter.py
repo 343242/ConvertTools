@@ -1,0 +1,93 @@
+import os
+from PIL import Image
+from PySide6.QtGui import QImage
+
+SUPPORTED_INPUT = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tiff", ".tif", ".gif", ".ico", ".psd"}
+SUPPORTED_OUTPUT = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tiff", ".tif", ".ico"}
+
+
+class ImageConverter:
+    def convert(self, input_path: str, output_path: str, options: dict | None = None) -> str:
+        options = options or {}
+        ext = os.path.splitext(input_path)[1].lower()
+
+        if ext == ".psd":
+            from core.psd_handler import PSDHandler
+            handler = PSDHandler(input_path)
+            img = handler.get_composite()
+            if img is None:
+                raise ValueError(f"无法读取 PSD: {input_path}")
+        else:
+            img = Image.open(input_path)
+
+        return self._save(img, output_path, options)
+
+    def convert_pil(self, img: Image.Image, output_path: str, fmt: str, options: dict | None = None) -> str:
+        return self._save(img, output_path, options or {}, fmt)
+
+    def convert_qimage(self, qimage: QImage, output_path: str, fmt: str, options: dict | None = None) -> str:
+        img = self._qimage_to_pil(qimage)
+        return self._save(img, output_path, options or {}, fmt)
+
+    def _save(self, img: Image.Image, output_path: str, options: dict, fmt: str | None = None) -> str:
+        if fmt is None:
+            fmt = os.path.splitext(output_path)[1].lstrip(".").upper()
+            if fmt == "JPG":
+                fmt = "JPEG"
+
+        save_kwargs = {}
+
+        if fmt == "JPEG":
+            img = img.convert("RGB")
+            save_kwargs["quality"] = options.get("quality", 95)
+            save_kwargs["subsampling"] = "4:4:4"
+            save_kwargs["optimize"] = True
+
+        elif fmt == "WebP":
+            if options.get("lossless", False):
+                save_kwargs["lossless"] = True
+            else:
+                save_kwargs["quality"] = options.get("quality", 95)
+            save_kwargs["method"] = 4
+
+        elif fmt == "PNG":
+            save_kwargs["compress_level"] = options.get("compress_level", 6)
+
+        elif fmt == "TIFF":
+            save_kwargs["compression"] = "tiff_lzw"
+
+        elif fmt == "ICO":
+            sizes = [(16, 16), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)]
+            save_kwargs["sizes"] = sizes
+
+        os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
+        img.save(output_path, format=fmt, **save_kwargs)
+        return output_path
+
+    def _qimage_to_pil(self, qimage: QImage) -> Image.Image:
+        qimage = qimage.convertToFormat(QImage.Format_RGBA8888)
+        width = qimage.width()
+        height = qimage.height()
+        ptr = qimage.bits()
+        ptr.setsize(height * width * 4)
+        data = bytes(ptr)
+        return Image.frombytes("RGBA", (width, height), data, "raw", "RGBA", 0, 1)
+
+    @staticmethod
+    def get_output_dir(input_path: str) -> str:
+        parent = os.path.dirname(input_path)
+        output_dir = os.path.join(parent, "converted")
+        os.makedirs(output_dir, exist_ok=True)
+        return output_dir
+
+    @staticmethod
+    def get_output_path(input_path: str, output_format: str, output_dir: str | None = None) -> str:
+        if output_dir is None:
+            output_dir = ImageConverter.get_output_dir(input_path)
+        name = os.path.splitext(os.path.basename(input_path))[0]
+        ext_map = {
+            "PNG": ".png", "JPEG": ".jpg", "WebP": ".webp",
+            "BMP": ".bmp", "TIFF": ".tiff", "ICO": ".ico",
+        }
+        ext = ext_map.get(output_format.upper(), f".{output_format.lower()}")
+        return os.path.join(output_dir, name + ext)
