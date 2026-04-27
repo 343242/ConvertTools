@@ -52,3 +52,53 @@ uv run python main.py
 - **GUI**: PySide6 (Qt6)
 - **图片处理**: Pillow
 - **PSD 解析**: psd-tools
+
+## 打包为 .exe
+
+### 前置条件
+
+在 **Windows** 环境下操作（WSL/Linux 打包生成的是 Linux 可执行文件）：
+
+1. 安装 [Python 3.11+](https://www.python.org/downloads/) 和 [uv](https://docs.astral.sh/uv/)
+2. 克隆项目后执行：
+
+```bash
+uv sync
+```
+
+### 构建可执行文件
+
+```bash
+uv run pyinstaller ConvertTools.spec --noconfirm
+```
+
+输出目录：`dist/ConvertTools/ConvertTools.exe`
+
+### 制作安装程序（可选）
+
+使用 [Inno Setup](https://jrsoftware.org/isinfo.php) 或 [NSIS](https://nsis.sourceforge.io/) 将 `dist/ConvertTools/` 目录打包为安装程序：
+
+**Inno Setup 示例** (`installer.iss`)：
+
+```ini
+[Setup]
+AppName=ConvertTools
+AppVersion=0.1.0
+DefaultDirName={pf}\ConvertTools
+DefaultGroupName=ConvertTools
+OutputBaseFilename=ConvertTools-Setup
+Compression=lzma2/ultra64
+
+[Files]
+Source: "dist\ConvertTools\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs
+
+[Icons]
+Name: "{group}\ConvertTools"; Filename: "{app}\ConvertTools.exe"
+Name: "{commondesktop}\ConvertTools"; Filename: "{app}\ConvertTools.exe"
+```
+
+### 注意事项
+
+- 打包已排除：测试代码 (`tests/`)、开发工具 (`pytest`)、`.omc/`、`.claude/`、`.venv/`
+- 预期产物大小：~190MB（主要来自 Qt 运行时）
+- 如需进一步压缩体积，可在 spec 文件 `excludes` 中添加更多不需要的 Qt 模块
