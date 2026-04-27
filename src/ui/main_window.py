@@ -8,6 +8,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QImage, QAction, QKeySequence
 
+from core.image_loader import RasterImageLoader
 from ui.canvas_widget import CanvasWidget, Tool
 from ui.toolbar import ToolBar
 
@@ -285,13 +286,8 @@ class MainWindow(QMainWindow):
             if ext == ".psd":
                 self._load_psd(path)
             else:
-                from PIL import Image
-                img = Image.open(path)
-                self.canvas.load_pil_image(img)
-                self._current_file_path = path
-                self._update_status(f"已打开: {os.path.basename(path)}")
-                self.setWindowTitle(f"ConvertTools - {os.path.basename(path)}")
-                self._push_history()
+                image = RasterImageLoader.load(path)
+                self._display_loaded_image(image, path, "已打开")
         except Exception as e:
             QMessageBox.critical(self, "错误", f"无法打开文件:\n{e}")
 
@@ -302,16 +298,25 @@ class MainWindow(QMainWindow):
             self._psd_handler = handler
             composite = handler.get_composite()
             if composite:
-                self.canvas.load_pil_image(composite)
-            self._current_file_path = path
-            self._update_status(f"已打开 PSD: {os.path.basename(path)}")
-            self.setWindowTitle(f"ConvertTools - {os.path.basename(path)}")
-            self._push_history()
+                self._display_loaded_image(composite, path, "已打开 PSD")
             self._populate_layers(handler)
         except ImportError:
             QMessageBox.warning(self, "提示", "PSD 支持需要安装 psd-tools:\npip install psd-tools")
         except Exception as e:
             QMessageBox.critical(self, "错误", f"无法打开 PSD 文件:\n{e}")
+
+    def _display_loaded_image(self, image, path: str, status_prefix: str):
+        if isinstance(image, QImage):
+            self.canvas.load_image(image)
+        else:
+            self.canvas.load_pil_image(image)
+        self._current_file_path = path
+        self._psd_handler = None if not path.lower().endswith(".psd") else self._psd_handler
+        self._image_history = []
+        self._history_index = -1
+        self._update_status(f"{status_prefix}: {os.path.basename(path)}")
+        self.setWindowTitle(f"ConvertTools - {os.path.basename(path)}")
+        self._push_history()
 
     def _populate_layers(self, handler):
         while self.layer_layout.count():

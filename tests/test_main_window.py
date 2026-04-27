@@ -75,3 +75,26 @@ def test_undo_reverts_brush_annotation():
         for x in range(reverted.width())
         for y in range(reverted.height())
     )
+
+
+def test_opening_new_image_resets_history_baseline():
+    get_qapp()
+    window = MainWindow()
+
+    first = QImage(20, 12, QImage.Format_RGBA8888)
+    first.fill(QColor("red"))
+    second = QImage(24, 14, QImage.Format_RGBA8888)
+    second.fill(QColor("blue"))
+
+    window._display_loaded_image(first, "/tmp/first.png", "已打开")
+    assert len(window._image_history) == 1
+    assert window._history_index == 0
+
+    drag_brush(window, viewport_pos(window, 2, 2), viewport_pos(window, 10, 2))
+    assert len(window._image_history) == 2
+    assert window._history_index == 1
+
+    window._display_loaded_image(second, "/tmp/second.png", "已打开")
+    assert len(window._image_history) == 1
+    assert window._history_index == 0
+    assert window.canvas.get_current_image().size() == second.size()
