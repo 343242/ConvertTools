@@ -1,5 +1,5 @@
 import os
-from typing import Callable
+from threading import Event
 from PySide6.QtCore import QThread, Signal
 from core.converter import ImageConverter
 
@@ -21,21 +21,25 @@ class BatchEngine(QThread):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._tasks: list[BatchTask] = []
-        self._paused = False
-        self._cancelled = False
+        self._pause_event = Event()
+        self._pause_event.set()
+        self._cancel_event = Event()
         self._converter = ImageConverter()
 
     def set_tasks(self, tasks: list[BatchTask]):
         self._tasks = tasks
+        self._pause_event.set()
+        self._cancel_event.clear()
 
     def pause(self):
-        self._paused = True
+        self._pause_event.clear()
 
     def resume(self):
-        self._paused = False
+        self._pause_event.set()
 
     def cancel(self):
-        self._cancelled = True
+        self._cancel_event.set()
+        self._pause_event.set()
 
     def run(self):
         succeeded = 0
@@ -43,18 +47,16 @@ class BatchEngine(QThread):
         total = len(self._tasks)
 
         for i, task in enumerate(self._tasks):
-            if self._cancelled:
+            if self._cancel_event.is_set():
                 break
 
-            while self._paused and not self._cancelled:
-                self.msleep(100)
-
-            if self._cancelled:
+            while not self._pause_event.wait(0.1):
+                if self._cancel_event.is_set():
+                    break
+            if self._cancel_event.is_set():
                 break
 
             filename = os.path.basename(task.input_path)
-            self.progress.emit(i + 1, total, filename)
-
             try:
                 output_dir = task.output_dir or ImageConverter.get_output_dir(task.input_path)
                 output_path = ImageConverter.get_output_path(
@@ -66,5 +68,6 @@ class BatchEngine(QThread):
             except Exception as e:
                 self.file_error.emit(task.input_path, str(e))
                 failed += 1
+            self.progress.emit(i + 1, total, filename)
 
         self.finished_all.emit(succeeded, failed)

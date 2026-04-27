@@ -47,3 +47,26 @@ def test_falls_back_to_pillow_when_qt_read_fails(monkeypatch):
         assert image.height() == 12
     finally:
         os.remove(path)
+
+
+def test_raises_when_qt_and_pillow_both_fail(monkeypatch):
+    path = create_temp_image(".png")
+    try:
+        monkeypatch.setattr(
+            RasterImageLoader,
+            "_load_with_qt",
+            staticmethod(lambda _path: QImage()),
+        )
+        monkeypatch.setattr(
+            RasterImageLoader,
+            "_load_with_pillow",
+            staticmethod(lambda _path: (_ for _ in ()).throw(OSError("corrupt image"))),
+        )
+        try:
+            RasterImageLoader.load(path)
+        except OSError as exc:
+            assert "corrupt image" in str(exc)
+        else:
+            raise AssertionError("Expected RasterImageLoader.load to raise OSError")
+    finally:
+        os.remove(path)

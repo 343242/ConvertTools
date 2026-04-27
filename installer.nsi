@@ -10,7 +10,7 @@
 Name "${APP_NAME}"
 OutFile "dist\ConvertTools-Setup.exe"
 InstallDir "$PROGRAMFILES64\${APP_NAME}"
-InstallDirRegKey HKCU "Software\${APP_NAME}" ""
+InstallDirRegKey HKLM "Software\${APP_NAME}" ""
 RequestExecutionLevel admin
 
 InstType "完整安装"
@@ -39,7 +39,7 @@ Section "!核心文件" SecCore
   SetOutPath "$INSTDIR"
   File /r "${APP_DIR}\*"
 
-  WriteRegStr HKCU "Software\${APP_NAME}" "" $INSTDIR
+  WriteRegStr HKLM "Software\${APP_NAME}" "" $INSTDIR
   WriteUninstaller "$INSTDIR\Uninstall.exe"
   WriteRegStr HKLM "${APP_UNINSTALL_KEY}" "DisplayName" "${APP_NAME}"
   WriteRegStr HKLM "${APP_UNINSTALL_KEY}" "DisplayVersion" "${APP_VERSION}"
@@ -81,6 +81,6 @@ Section "Uninstall"
   Delete "$INSTDIR\Uninstall.exe"
   RMDir /r "$INSTDIR"
 
-  DeleteRegKey HKCU "Software\${APP_NAME}"
+  DeleteRegKey HKLM "Software\${APP_NAME}"
   DeleteRegKey HKLM "${APP_UNINSTALL_KEY}"
 SectionEnd

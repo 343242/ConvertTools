@@ -1,4 +1,8 @@
+import logging
+
 from PIL import Image
+
+logger = logging.getLogger(__name__)
 
 
 class PSDHandler:
@@ -48,7 +52,13 @@ class PSDHandler:
             if bbox != (0, 0, 0, 0):
                 canvas.paste(img, (bbox[0], bbox[1]))
             return canvas
-        except Exception:
+        except (OSError, ValueError) as exc:
+            logger.warning(
+                "Failed to render PSD layer %s from %s: %s",
+                layer_index,
+                self._path,
+                exc,
+            )
             return None
 
     def get_visible_composite(self, visible_indices: set[int]) -> Image.Image | None:
@@ -69,6 +79,12 @@ class PSDHandler:
                     temp = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
                     temp.paste(img, (bbox[0], bbox[1]))
                     canvas = Image.alpha_composite(canvas, temp)
-            except Exception:
+            except (OSError, ValueError) as exc:
+                logger.warning(
+                    "Skipping PSD layer %s while compositing %s: %s",
+                    i,
+                    self._path,
+                    exc,
+                )
                 continue
         return canvas

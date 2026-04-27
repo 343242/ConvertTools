@@ -18,31 +18,41 @@ def adjust_saturation(img: Image.Image, value: int) -> Image.Image:
 
 
 def grayscale(img: Image.Image) -> Image.Image:
-    mode = img.mode
-    return img.convert("L").convert(mode)
+    alpha = img.getchannel("A") if "A" in img.getbands() else None
+    grayscale_image = ImageOps.grayscale(img.convert("RGB"))
+    if alpha is None:
+        return grayscale_image.convert(img.mode)
+    result = grayscale_image.convert("RGBA")
+    result.putalpha(alpha)
+    return result if img.mode == "RGBA" else result.convert(img.mode)
 
 
 def sepia(img: Image.Image) -> Image.Image:
     orig_mode = img.mode
-    if orig_mode != "RGBA":
-        img = img.convert("RGBA")
-    data = img.get_flattened_data()
-    new_data = []
-    for r, g, b, a in data:
-        tr = min(255, int(r * 0.393 + g * 0.769 + b * 0.189))
-        tg = min(255, int(r * 0.349 + g * 0.686 + b * 0.168))
-        tb = min(255, int(r * 0.272 + g * 0.534 + b * 0.131))
-        new_data.append((tr, tg, tb, a))
-    result = Image.new("RGBA", img.size)
-    result.putdata(new_data)
+    rgba_image = img.convert("RGBA")
+    source_pixels = rgba_image.load()
+    result = Image.new("RGBA", rgba_image.size)
+    result_pixels = result.load()
+    for x in range(rgba_image.width):
+        for y in range(rgba_image.height):
+            r, g, b, a = source_pixels[x, y]
+            tr = min(255, int(r * 0.393 + g * 0.769 + b * 0.189))
+            tg = min(255, int(r * 0.349 + g * 0.686 + b * 0.168))
+            tb = min(255, int(r * 0.272 + g * 0.534 + b * 0.131))
+            result_pixels[x, y] = (tr, tg, tb, a)
     if orig_mode != "RGBA":
         result = result.convert(orig_mode)
     return result
 
 
 def invert(img: Image.Image) -> Image.Image:
-    mode = img.mode
-    return ImageOps.invert(img.convert("RGB")).convert(mode)
+    alpha = img.getchannel("A") if "A" in img.getbands() else None
+    inverted = ImageOps.invert(img.convert("RGB"))
+    if alpha is None:
+        return inverted.convert(img.mode)
+    result = inverted.convert("RGBA")
+    result.putalpha(alpha)
+    return result if img.mode == "RGBA" else result.convert(img.mode)
 
 
 def blur(img: Image.Image, radius: int = 2) -> Image.Image:

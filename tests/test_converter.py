@@ -99,6 +99,16 @@ class TestConvert:
         assert result.size == (4, 3)
         assert result.getpixel((0, 0)) == (10, 20, 30, 255)
 
+    def test_missing_input_file_raises_file_not_found(self, tmp_dir):
+        out = os.path.join(tmp_dir, "out.png")
+        with pytest.raises(FileNotFoundError):
+            ImageConverter().convert(os.path.join(tmp_dir, "missing.png"), out)
+
+    def test_null_qimage_export_raises_value_error(self, tmp_dir):
+        out = os.path.join(tmp_dir, "null.png")
+        with pytest.raises(ValueError):
+            ImageConverter().convert_qimage(QImage(), out, "PNG")
+
 
 class TestOutputPaths:
     def test_get_output_dir(self, sample_image):

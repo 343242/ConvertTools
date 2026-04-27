@@ -9,6 +9,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QImage, QAction, QKeySequence
 
 from core.image_loader import RasterImageLoader
+from core.converter import ImageConverter, SUPPORTED_INPUT
 from ui.canvas_widget import CanvasWidget, Tool
 from ui.toolbar import ToolBar
 
@@ -25,7 +26,8 @@ class MainWindow(QMainWindow):
         self._psd_handler = None
         self._image_history: list[QImage] = []
         self._history_index = -1
-        self._max_history = 20
+        self._history_entry_hard_cap = 20
+        self._history_memory_budget = 256 * 1024 * 1024
         self._setup_ui()
         self._setup_menu()
         self._setup_connections()
@@ -398,10 +400,8 @@ class MainWindow(QMainWindow):
             return
 
         try:
-            from core.converter import ImageConverter
-            converter = ImageConverter()
             options = self._get_export_options(fmt)
-            converter.convert_qimage(img, save_path, fmt, options)
+            ImageConverter().convert_qimage(img, save_path, fmt, options)
             self._update_status(f"已导出: {os.path.basename(save_path)}")
             QMessageBox.information(self, "成功", f"图片已导出到:\n{save_path}")
         except Exception as e:
@@ -450,13 +450,19 @@ class MainWindow(QMainWindow):
             self.canvas.load_image(self._image_history[self._history_index].copy())
             self._update_status(f"撤销 ({self._history_index + 1}/{len(self._image_history)})")
 
+    def _history_limit_for_image(self, image: QImage) -> int:
+        image_bytes = max(image.sizeInBytes(), 1)
+        budget_limited = max(2, self._history_memory_budget // image_bytes)
+        return max(2, min(self._history_entry_hard_cap, budget_limited))
+
     def _push_history(self):
         img = self.canvas.get_current_image()
         if img is None:
             return
         self._image_history = self._image_history[:self._history_index + 1]
         self._image_history.append(img.copy())
-        if len(self._image_history) > self._max_history:
+        max_history = self._history_limit_for_image(img)
+        while len(self._image_history) > max_history:
             self._image_history.pop(0)
         self._history_index = len(self._image_history) - 1
 
@@ -464,9 +470,7 @@ class MainWindow(QMainWindow):
         img = self.canvas.get_current_image()
         if img is None:
             return
-        from core.converter import ImageConverter
-        converter = ImageConverter()
-        pil_img = converter._qimage_to_pil(img)
+        pil_img = ImageConverter().qimage_to_pil(img)
         from core.filters import PRESETS
         if name not in PRESETS:
             return
@@ -484,9 +488,7 @@ class MainWindow(QMainWindow):
         saturation = self.saturation_slider.value()
         if brightness == 0 and contrast == 0 and saturation == 0:
             return
-        from core.converter import ImageConverter
-        converter = ImageConverter()
-        pil_img = converter._qimage_to_pil(img)
+        pil_img = ImageConverter().qimage_to_pil(img)
         from core.filters import apply_adjustments
         result = apply_adjustments(pil_img, brightness, contrast, saturation)
         self.canvas.load_pil_image(result)
@@ -507,7 +509,15 @@ class MainWindow(QMainWindow):
 
     def dragEnterEvent(self, event):
         if event.mimeData().hasUrls():
-            event.acceptProposedAction()
+            urls = event.mimeData().urls()
+            if any(
+                os.path.splitext(url.toLocalFile())[1].lower() in SUPPORTED_INPUT
+                for url in urls
+                if url.isLocalFile()
+            ):
+                event.acceptProposedAction()
+            else:
+                event.ignore()
 
     def dropEvent(self, event):
         urls = event.mimeData().urls()

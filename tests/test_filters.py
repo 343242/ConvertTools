@@ -10,6 +10,10 @@ from core.filters import (
 )
 
 
+def pixel_list(image: Image.Image):
+    return [image.getpixel((x, y)) for y in range(image.height) for x in range(image.width)]
+
+
 @pytest.fixture
 def rgb_image():
     return Image.new("RGB", (32, 32), (128, 100, 60))
@@ -30,8 +34,14 @@ class TestPresets:
     def test_grayscale_produces_gray(self):
         img = Image.new("RGB", (2, 2), (255, 0, 0))
         result = grayscale(img)
-        pixels = result.get_flattened_data()
+        pixels = pixel_list(result)
         assert all(r == g == b for r, g, b in pixels)
+
+    def test_grayscale_preserves_alpha(self):
+        img = Image.new("RGBA", (1, 1), (255, 0, 0, 77))
+        result = grayscale(img)
+        assert result.mode == "RGBA"
+        assert result.getpixel((0, 0))[3] == 77
 
     def test_invert(self):
         img = Image.new("RGB", (1, 1), (100, 150, 200))
@@ -41,9 +51,15 @@ class TestPresets:
         assert g == 105
         assert b == 55
 
+    def test_invert_preserves_alpha(self):
+        img = Image.new("RGBA", (1, 1), (10, 20, 30, 64))
+        result = invert(img)
+        assert result.getpixel((0, 0)) == (245, 235, 225, 64)
+
     def test_sepia_rgba(self, rgba_image):
         result = sepia(rgba_image)
         assert result.mode == "RGBA"
+        assert result.getpixel((0, 0))[3] == 255
 
     def test_blur_preserves_size(self, rgb_image):
         result = blur(rgb_image, radius=3)
@@ -57,7 +73,7 @@ class TestPresets:
 class TestAdjustments:
     def test_no_change(self, rgb_image):
         result = apply_adjustments(rgb_image, 0, 0, 0)
-        assert result.get_flattened_data() == rgb_image.get_flattened_data()
+        assert pixel_list(result) == pixel_list(rgb_image)
 
     def test_brightness(self, rgb_image):
         result = adjust_brightness(rgb_image, 50)
@@ -71,7 +87,8 @@ class TestAdjustments:
 
     def test_saturation(self, rgb_image):
         result = adjust_saturation(rgb_image, -100)
-        gray_pixels = result.convert("L").get_flattened_data()
+        grayscale = result.convert("L")
+        gray_pixels = pixel_list(grayscale)
         assert all(g == gray_pixels[0] for g in gray_pixels)
 
     def test_combined_adjustments(self, rgb_image):

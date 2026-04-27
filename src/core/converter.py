@@ -9,6 +9,8 @@ SUPPORTED_OUTPUT = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tiff", ".tif", "
 class ImageConverter:
     def convert(self, input_path: str, output_path: str, options: dict | None = None) -> str:
         options = options or {}
+        if not os.path.isfile(input_path):
+            raise FileNotFoundError(f"输入文件不存在: {input_path}")
         ext = os.path.splitext(input_path)[1].lower()
 
         if ext == ".psd":
@@ -18,7 +20,8 @@ class ImageConverter:
             if img is None:
                 raise ValueError(f"无法读取 PSD: {input_path}")
         else:
-            img = Image.open(input_path)
+            with Image.open(input_path) as opened:
+                img = opened.copy()
 
         return self._save(img, output_path, options)
 
@@ -26,8 +29,11 @@ class ImageConverter:
         return self._save(img, output_path, options or {}, fmt)
 
     def convert_qimage(self, qimage: QImage, output_path: str, fmt: str, options: dict | None = None) -> str:
-        img = self._qimage_to_pil(qimage)
+        img = self.qimage_to_pil(qimage)
         return self._save(img, output_path, options or {}, fmt)
+
+    def qimage_to_pil(self, qimage: QImage) -> Image.Image:
+        return self._qimage_to_pil(qimage)
 
     def _save(self, img: Image.Image, output_path: str, options: dict, fmt: str | None = None) -> str:
         if fmt is None:
@@ -64,10 +70,18 @@ class ImageConverter:
         return output_path
 
     def _qimage_to_pil(self, qimage: QImage) -> Image.Image:
+        if qimage.isNull():
+            raise ValueError("QImage 为空，无法导出")
+
         qimage = qimage.convertToFormat(QImage.Format_RGBA8888)
+        if qimage.isNull():
+            raise ValueError("QImage 像素转换失败，无法导出")
+
         width = qimage.width()
         height = qimage.height()
         buffer = qimage.bits()
+        if buffer is None:
+            raise ValueError("QImage 像素缓冲区不可用，无法导出")
         size = qimage.sizeInBytes()
 
         # PySide6 may expose QImage bits as either a shiboken buffer with

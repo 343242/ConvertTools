@@ -92,12 +92,24 @@ class TestBatchEngine:
         assert "nonexistent" in errors[0][0]
 
     def test_batch_cancel(self, sample_files, tmp_dir):
-        tasks = [BatchTask(p, "PNG", tmp_dir) for p in sample_files]
+        out_dir = os.path.join(tmp_dir, "cancelled-output")
+        tasks = [BatchTask(p, "PNG", out_dir) for p in sample_files]
         engine = BatchEngine()
         engine.set_tasks(tasks)
+        completed = []
+        errors = []
+        progress = []
+        engine.file_done.connect(lambda inp, out: completed.append(out))
+        engine.file_error.connect(lambda inp, msg: errors.append((inp, msg)))
+        engine.progress.connect(lambda current, total, name: progress.append((current, total, name)))
         engine.cancel()
         engine.run()
-        assert True
+        assert completed == []
+        assert errors == []
+        assert progress == []
+        for path in sample_files:
+            output_path = ImageConverter.get_output_path(path, "PNG", out_dir)
+            assert not os.path.exists(output_path)
 
     def test_batch_webp_format(self, sample_files, tmp_dir):
         out_dir = os.path.join(tmp_dir, "webp_out")

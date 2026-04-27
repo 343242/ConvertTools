@@ -7,7 +7,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt
 from core.batch_engine import BatchEngine, BatchTask
-from core.converter import ImageConverter, SUPPORTED_INPUT
+from core.converter import SUPPORTED_INPUT
 
 
 class BatchDialog(QDialog):
@@ -22,6 +22,11 @@ class BatchDialog(QDialog):
         self._errors: list[tuple[str, str]] = []
 
         self._setup_ui()
+
+    def _add_file_item(self, path: str):
+        item = QListWidgetItem(path)
+        item.setData(Qt.UserRole, path)
+        self.file_list.addItem(item)
 
     def _setup_ui(self):
         layout = QVBoxLayout(self)
@@ -119,7 +124,7 @@ class BatchDialog(QDialog):
             "所有文件 (*)"
         )
         for p in paths:
-            self.file_list.addItem(p)
+            self._add_file_item(p)
         self._update_count()
 
     def _add_folder(self):
@@ -130,7 +135,7 @@ class BatchDialog(QDialog):
             for f in files:
                 ext = os.path.splitext(f)[1].lower()
                 if ext in SUPPORTED_INPUT:
-                    self.file_list.addItem(os.path.join(root, f))
+                    self._add_file_item(os.path.join(root, f))
         self._update_count()
 
     def _remove_selected(self):
@@ -211,7 +216,7 @@ class BatchDialog(QDialog):
     def _on_file_done(self, input_path: str, output_path: str):
         for i in range(self.file_list.count()):
             item = self.file_list.item(i)
-            if item.text() == input_path:
+            if item.data(Qt.UserRole) == input_path:
                 item.setText(f"✓ {os.path.basename(input_path)}")
                 item.setForeground(Qt.darkGreen)
                 break
@@ -220,7 +225,7 @@ class BatchDialog(QDialog):
         self._errors.append((input_path, error))
         for i in range(self.file_list.count()):
             item = self.file_list.item(i)
-            if os.path.basename(item.text()).replace("✗ ", "") == os.path.basename(input_path) or item.text() == input_path:
+            if item.data(Qt.UserRole) == input_path:
                 item.setText(f"✗ {os.path.basename(input_path)}: {error}")
                 item.setForeground(Qt.red)
                 break
@@ -243,5 +248,5 @@ class BatchDialog(QDialog):
             for f in files:
                 ext = os.path.splitext(f)[1].lower()
                 if ext in SUPPORTED_INPUT:
-                    self.file_list.addItem(os.path.join(root, f))
+                    self._add_file_item(os.path.join(root, f))
         self._update_count()

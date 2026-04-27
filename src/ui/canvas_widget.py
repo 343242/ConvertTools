@@ -87,6 +87,11 @@ class CanvasWidget(QGraphicsView):
 
     def load_image(self, image: QImage):
         self._current_image = image
+        self._panning = False
+        self._drawing = False
+        self._temp_item = None
+        self._pan_start = QPointF()
+        self._draw_start = QPointF()
         self._scene.clear()
         self._pixmap_item = QGraphicsPixmapItem(QPixmap.fromImage(image))
         self._scene.addItem(self._pixmap_item)
@@ -97,14 +102,16 @@ class CanvasWidget(QGraphicsView):
 
     def load_pil_image(self, pil_image):
         if pil_image.mode == "RGBA":
+            image_bytes = pil_image.tobytes()
             qimage = QImage(
-                pil_image.tobytes(), pil_image.width, pil_image.height,
+                image_bytes, pil_image.width, pil_image.height,
                 pil_image.width * 4, QImage.Format_RGBA8888
             )
         else:
             pil_image = pil_image.convert("RGB")
+            image_bytes = pil_image.tobytes()
             qimage = QImage(
-                pil_image.tobytes(), pil_image.width, pil_image.height,
+                image_bytes, pil_image.width, pil_image.height,
                 pil_image.width * 3, QImage.Format_RGB888
             )
         self.load_image(qimage.copy())
@@ -117,35 +124,33 @@ class CanvasWidget(QGraphicsView):
         if self._current_image is None:
             return None
         hidden_items = []
-        for item in self._scene.items():
-            if item is self._pixmap_item:
-                continue
-            if item.data(0) == "crop":
-                hidden_items.append(item)
-                item.setVisible(False)
+        try:
+            for item in self._scene.items():
+                if item is self._pixmap_item:
+                    continue
+                if item.data(0) == "crop":
+                    hidden_items.append(item)
+                    item.setVisible(False)
 
-        has_overlays = any(
-            item is not self._pixmap_item and item.isVisible()
-            for item in self._scene.items()
-        )
-        if not has_overlays:
+            has_overlays = any(
+                item is not self._pixmap_item and item.isVisible()
+                for item in self._scene.items()
+            )
+            if not has_overlays:
+                return self._current_image
+            rect = self._scene.sceneRect().toRect()
+            if rect.isEmpty():
+                return self._current_image
+            rendered = QImage(rect.size(), QImage.Format_RGBA8888)
+            rendered.fill(Qt.transparent)
+            painter = QPainter(rendered)
+            painter.setRenderHints(QPainter.Antialiasing | QPainter.SmoothPixmapTransform)
+            self._scene.render(painter, QRectF(rendered.rect()), rect)
+            painter.end()
+            return rendered
+        finally:
             for item in hidden_items:
                 item.setVisible(True)
-            return self._current_image
-        rect = self._scene.sceneRect().toRect()
-        if rect.isEmpty():
-            for item in hidden_items:
-                item.setVisible(True)
-            return self._current_image
-        rendered = QImage(rect.size(), QImage.Format_RGBA8888)
-        rendered.fill(Qt.transparent)
-        painter = QPainter(rendered)
-        painter.setRenderHints(QPainter.Antialiasing | QPainter.SmoothPixmapTransform)
-        self._scene.render(painter, QRectF(rendered.rect()), rect)
-        painter.end()
-        for item in hidden_items:
-            item.setVisible(True)
-        return rendered
 
     def fit_in_view(self):
         if self._pixmap_item:
@@ -368,7 +373,7 @@ class CanvasWidget(QGraphicsView):
 
     def clear_annotations(self):
         removed = False
-        for item in self._scene.items():
+        for item in list(self._scene.items()):
             if item is not self._pixmap_item and item is not self._temp_item:
                 self._scene.removeItem(item)
                 removed = True

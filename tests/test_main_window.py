@@ -98,3 +98,20 @@ def test_opening_new_image_resets_history_baseline():
     assert len(window._image_history) == 1
     assert window._history_index == 0
     assert window.canvas.get_current_image().size() == second.size()
+
+
+def test_history_is_trimmed_by_memory_budget():
+    get_qapp()
+    window = MainWindow()
+    window._history_memory_budget = 1024
+    window._history_entry_hard_cap = 20
+
+    image = QImage(20, 20, QImage.Format_RGBA8888)
+    image.fill(QColor("white"))
+    window.canvas.load_image(image)
+
+    for _ in range(5):
+        window._push_history()
+
+    assert len(window._image_history) == 2
+    assert window._history_index == 1
