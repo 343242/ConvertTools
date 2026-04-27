@@ -137,8 +137,11 @@ class CanvasWidget(QGraphicsView):
         self.scale(factor, factor)
         self._zoom_level *= factor
 
+    def _scene_pos_from_event(self, event: QMouseEvent) -> QPointF:
+        return self.mapToScene(event.position().toPoint())
+
     def mousePressEvent(self, event: QMouseEvent):
-        pos = self.mapToScene(event.position())
+        pos = self._scene_pos_from_event(event)
 
         if event.button() == Qt.MiddleButton or (
             event.button() == Qt.LeftButton and self._current_tool == Tool.PAN
@@ -169,7 +172,7 @@ class CanvasWidget(QGraphicsView):
             return
 
         if self._drawing:
-            pos = self.mapToScene(event.position())
+            pos = self._scene_pos_from_event(event)
             self._update_drawing(pos)
             return
 
@@ -185,7 +188,7 @@ class CanvasWidget(QGraphicsView):
             return
 
         if self._drawing:
-            pos = self.mapToScene(event.position())
+            pos = self._scene_pos_from_event(event)
             self._finish_drawing(pos)
             self._drawing = False
             return
