@@ -5,7 +5,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, QPointF, QRectF, Signal
 from PySide6.QtGui import (
     QPixmap, QImage, QPainter, QPen, QBrush, QColor,
-    QPainterPath, QWheelEvent, QMouseEvent, QFont
+    QPainterPath, QWheelEvent, QMouseEvent, QFont, QTextCursor
 )
 from enum import Enum, auto
 
@@ -22,6 +22,7 @@ class Tool(Enum):
 
 class CanvasWidget(QGraphicsView):
     image_changed = Signal()
+    edit_committed = Signal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -49,6 +50,19 @@ class CanvasWidget(QGraphicsView):
         self._pen_width = 2
         self._current_image: QImage | None = None
         self._zoom_level = 1.0
+
+    def _has_image(self) -> bool:
+        return self._current_image is not None and self._pixmap_item is not None
+
+    def _is_draw_tool(self, tool: Tool | None = None) -> bool:
+        tool = self._current_tool if tool is None else tool
+        return tool in {
+            Tool.CROP,
+            Tool.ANNOTATE_RECT,
+            Tool.ANNOTATE_ARROW,
+            Tool.ANNOTATE_TEXT,
+            Tool.BRUSH,
+        }
 
     def set_tool(self, tool: Tool):
         self.current_tool = tool
@@ -102,14 +116,26 @@ class CanvasWidget(QGraphicsView):
         """Render scene (base image + all overlays) into a single QImage."""
         if self._current_image is None:
             return None
+        hidden_items = []
+        for item in self._scene.items():
+            if item is self._pixmap_item:
+                continue
+            if item.data(0) == "crop":
+                hidden_items.append(item)
+                item.setVisible(False)
+
         has_overlays = any(
-            item is not self._pixmap_item
+            item is not self._pixmap_item and item.isVisible()
             for item in self._scene.items()
         )
         if not has_overlays:
+            for item in hidden_items:
+                item.setVisible(True)
             return self._current_image
         rect = self._scene.sceneRect().toRect()
         if rect.isEmpty():
+            for item in hidden_items:
+                item.setVisible(True)
             return self._current_image
         rendered = QImage(rect.size(), QImage.Format_RGBA8888)
         rendered.fill(Qt.transparent)
@@ -117,6 +143,8 @@ class CanvasWidget(QGraphicsView):
         painter.setRenderHints(QPainter.Antialiasing | QPainter.SmoothPixmapTransform)
         self._scene.render(painter, QRectF(rendered.rect()), rect)
         painter.end()
+        for item in hidden_items:
+            item.setVisible(True)
         return rendered
 
     def fit_in_view(self):
@@ -140,9 +168,16 @@ class CanvasWidget(QGraphicsView):
     def _scene_pos_from_event(self, event: QMouseEvent) -> QPointF:
         return self.mapToScene(event.position().toPoint())
 
-    def mousePressEvent(self, event: QMouseEvent):
-        pos = self._scene_pos_from_event(event)
+    def _bounded_scene_pos(self, pos: QPointF) -> QPointF:
+        scene_rect = self._scene.sceneRect()
+        if scene_rect.isNull():
+            return pos
+        return QPointF(
+            min(max(pos.x(), scene_rect.left()), scene_rect.right()),
+            min(max(pos.y(), scene_rect.top()), scene_rect.bottom()),
+        )
 
+    def mousePressEvent(self, event: QMouseEvent):
         if event.button() == Qt.MiddleButton or (
             event.button() == Qt.LeftButton and self._current_tool == Tool.PAN
         ):
@@ -151,7 +186,8 @@ class CanvasWidget(QGraphicsView):
             self.setCursor(Qt.ClosedHandCursor)
             return
 
-        if event.button() == Qt.LeftButton:
+        if event.button() == Qt.LeftButton and self._has_image() and self._is_draw_tool():
+            pos = self._bounded_scene_pos(self._scene_pos_from_event(event))
             self._drawing = True
             self._draw_start = pos
             self._start_drawing(pos)
@@ -172,7 +208,7 @@ class CanvasWidget(QGraphicsView):
             return
 
         if self._drawing:
-            pos = self._scene_pos_from_event(event)
+            pos = self._bounded_scene_pos(self._scene_pos_from_event(event))
             self._update_drawing(pos)
             return
 
@@ -188,7 +224,7 @@ class CanvasWidget(QGraphicsView):
             return
 
         if self._drawing:
-            pos = self._scene_pos_from_event(event)
+            pos = self._bounded_scene_pos(self._scene_pos_from_event(event))
             self._finish_drawing(pos)
             self._drawing = False
             return
@@ -197,6 +233,7 @@ class CanvasWidget(QGraphicsView):
 
     def _start_drawing(self, pos: QPointF):
         if self._current_tool == Tool.CROP:
+            self._remove_crop_guides()
             pen = QPen(QColor(0, 150, 255), 2, Qt.DashLine)
             rect = QGraphicsRectItem(QRectF(pos, pos))
             rect.setPen(pen)
@@ -239,6 +276,12 @@ class CanvasWidget(QGraphicsView):
             self._scene.addItem(text_item)
             self._temp_item = text_item
             self._drawing = False
+            self._scene.setFocusItem(text_item, Qt.MouseFocusReason)
+            text_item.setFocus(Qt.MouseFocusReason)
+            cursor = text_item.textCursor()
+            cursor.select(QTextCursor.SelectionType.Document)
+            text_item.setTextCursor(cursor)
+            self.edit_committed.emit()
 
     def _update_drawing(self, pos: QPointF):
         if not self._temp_item:
@@ -282,16 +325,52 @@ class CanvasWidget(QGraphicsView):
 
     def _finish_drawing(self, pos: QPointF):
         self._update_drawing(pos)
+        if self._current_tool in {
+            Tool.ANNOTATE_RECT,
+            Tool.ANNOTATE_ARROW,
+            Tool.BRUSH,
+        }:
+            self.edit_committed.emit()
         self._temp_item = None
 
     def apply_crop(self, rect: QRectF):
-        if not self._current_image:
-            return
-        cropped = self._current_image.copy(rect.toRect())
+        if not self._has_image():
+            return False
+        source = self.render_to_image()
+        if source is None:
+            return False
+        bounded_rect = rect.normalized().intersected(QRectF(source.rect()))
+        if bounded_rect.isEmpty():
+            return False
+        cropped = source.copy(bounded_rect.toRect())
         if not cropped.isNull():
             self.load_image(cropped)
+            self.edit_committed.emit()
+            return True
+        return False
+
+    def apply_active_crop(self) -> bool:
+        crop_rect = self.get_active_crop_rect()
+        if crop_rect is None:
+            return False
+        return self.apply_crop(crop_rect)
+
+    def get_active_crop_rect(self) -> QRectF | None:
+        for item in self._scene.items():
+            if isinstance(item, QGraphicsRectItem) and item.data(0) == "crop":
+                return item.sceneBoundingRect()
+        return None
+
+    def _remove_crop_guides(self):
+        for item in list(self._scene.items()):
+            if isinstance(item, QGraphicsRectItem) and item.data(0) == "crop":
+                self._scene.removeItem(item)
 
     def clear_annotations(self):
+        removed = False
         for item in self._scene.items():
             if item is not self._pixmap_item and item is not self._temp_item:
                 self._scene.removeItem(item)
+                removed = True
+        if removed:
+            self.edit_committed.emit()

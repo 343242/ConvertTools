@@ -3,7 +3,7 @@ from PySide6.QtWidgets import (
     QMainWindow, QFileDialog, QMessageBox, QDockWidget,
     QLabel, QWidget, QVBoxLayout, QProgressBar, QHBoxLayout,
     QComboBox, QSlider, QCheckBox, QSpinBox, QPushButton,
-    QGroupBox, QFormLayout, QTabWidget, QGraphicsRectItem
+    QGroupBox, QFormLayout, QTabWidget
 )
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QImage, QAction, QKeySequence
@@ -249,6 +249,7 @@ class MainWindow(QMainWindow):
         )
 
         self.canvas.image_changed.connect(self._on_image_changed)
+        self.canvas.edit_committed.connect(self._push_history)
 
         self.filter_apply_btn.clicked.connect(self._apply_filter_adjustments)
         self.filter_reset_btn.clicked.connect(self._reset_filter_adjustments)
@@ -435,12 +436,8 @@ class MainWindow(QMainWindow):
             QMessageBox.information(self, "提示", "批量转换功能正在开发中")
 
     def _apply_crop(self):
-        for item in self.canvas._scene.items():
-            if isinstance(item, QGraphicsRectItem) and item.data(0) == "crop":
-                rect = item.sceneBoundingRect()
-                self.canvas.apply_crop(rect)
-                self._push_history()
-                break
+        if self.canvas.apply_active_crop():
+            self._update_status("已应用裁剪")
 
     def _undo(self):
         if self._history_index > 0:
