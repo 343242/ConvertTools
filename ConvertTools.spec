@@ -34,9 +34,8 @@ a = Analysis(
     excludes=[
         # Test & dev
         'pytest', 'pluggy', 'iniconfig', 'packaging', 'pygments',
-        # Unnecessary stdlib
-        'unittest', 'xmlrunner', 'doctest', 'pydoc',
-        'difflib', 'inspect', 'ast', 'dis', 'ctypes.test',
+        # Optional tooling
+        'xmlrunner', 'ctypes.test',
         # Unused Qt modules
         'PySide6.QtNetwork', 'PySide6.QtSql', 'PySide6.QtTest',
         'PySide6.QtXml', 'PySide6.QtBluetooth', 'PySide6.QtNfc',

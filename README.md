@@ -97,7 +97,7 @@ makensis installer.nsi
 如果 `makensis` 不在 PATH 里，就用 NSIS 安装目录下的完整路径，例如：
 
 ```bash
-"C:\Program Files (x86)\NSIS\makensis.exe" installer.nsi
+& "C:\Program Files (x86)\NSIS\makensis.exe" /INPUTCHARSET UTF8 "installer.nsi"
 ```
 
 输出安装包：
@@ -154,3 +154,4 @@ Name: "{commondesktop}\ConvertTools"; Filename: "{app}\ConvertTools.exe"
 - 预期产物大小：~190MB（主要来自 Qt 运行时）
 - 如需进一步压缩体积，可在 spec 文件 `excludes` 中添加更多不需要的 Qt 模块
 - 分发时不要只拷贝单个 `ConvertTools.exe`，而应分发整个 `dist/ConvertTools/` 目录，或使用上面的安装包
+- 如果安装后的程序启动失败，Windows 版本会把启动日志写到 `%LOCALAPPDATA%\ConvertTools\startup-error.log`
