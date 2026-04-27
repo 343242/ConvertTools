@@ -32,8 +32,7 @@ class ImageConverter:
     def _save(self, img: Image.Image, output_path: str, options: dict, fmt: str | None = None) -> str:
         if fmt is None:
             fmt = os.path.splitext(output_path)[1].lstrip(".").upper()
-            if fmt == "JPG":
-                fmt = "JPEG"
+        fmt = self._normalize_format(fmt)
 
         save_kwargs = {}
 
@@ -72,6 +71,13 @@ class ImageConverter:
         ptr.setsize(height * width * 4)
         data = bytes(ptr)
         return Image.frombytes("RGBA", (width, height), data, "raw", "RGBA", 0, 1)
+
+    @staticmethod
+    def _normalize_format(fmt: str) -> str:
+        fmt = fmt.upper()
+        if fmt == "JPG":
+            return "JPEG"
+        return fmt
 
     @staticmethod
     def get_output_dir(input_path: str) -> str:

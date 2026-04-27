@@ -19,6 +19,7 @@ class BatchDialog(QDialog):
 
         self._engine: BatchEngine | None = None
         self._output_dir: str | None = None
+        self._errors: list[tuple[str, str]] = []
 
         self._setup_ui()
 
@@ -175,6 +176,8 @@ class BatchDialog(QDialog):
         self._engine.file_error.connect(self._on_file_error)
         self._engine.finished_all.connect(self._on_finished)
 
+        self._errors.clear()
+
         self.progress_bar.setVisible(True)
         self.progress_bar.setMaximum(len(tasks))
         self.progress_bar.setValue(0)
@@ -206,10 +209,21 @@ class BatchDialog(QDialog):
         self.status_label.setText(f"({current}/{total}) {filename}")
 
     def _on_file_done(self, input_path: str, output_path: str):
-        pass
+        for i in range(self.file_list.count()):
+            item = self.file_list.item(i)
+            if item.text() == input_path:
+                item.setText(f"✓ {os.path.basename(input_path)}")
+                item.setForeground(Qt.darkGreen)
+                break
 
     def _on_file_error(self, input_path: str, error: str):
-        pass
+        self._errors.append((input_path, error))
+        for i in range(self.file_list.count()):
+            item = self.file_list.item(i)
+            if os.path.basename(item.text()).replace("✗ ", "") == os.path.basename(input_path) or item.text() == input_path:
+                item.setText(f"✗ {os.path.basename(input_path)}: {error}")
+                item.setForeground(Qt.red)
+                break
 
     def _on_finished(self, succeeded: int, failed: int):
         self.progress_bar.setVisible(False)
@@ -221,4 +235,13 @@ class BatchDialog(QDialog):
         if failed == 0:
             QMessageBox.information(self, "完成", f"全部 {succeeded} 个文件转换成功！")
         else:
-            QMessageBox.warning(self, "完成", f"成功 {succeeded}, 失败 {failed}")
+            error_details = "\n".join(f"• {os.path.basename(p)}: {e}" for p, e in self._errors[:20])
+            QMessageBox.warning(self, "完成", f"成功 {succeeded}, 失败 {failed}\n\n失败明细:\n{error_details}")
+
+    def add_folder(self, folder: str):
+        for root, dirs, files in os.walk(folder):
+            for f in files:
+                ext = os.path.splitext(f)[1].lower()
+                if ext in SUPPORTED_INPUT:
+                    self.file_list.addItem(os.path.join(root, f))
+        self._update_count()

@@ -1,15 +1,12 @@
 import os
 from PySide6.QtWidgets import (
     QMainWindow, QFileDialog, QMessageBox, QDockWidget,
-    QStatusBar, QLabel, QMenuBar, QWidget, QVBoxLayout,
-    QProgressBar, QHBoxLayout, QComboBox, QSlider, QCheckBox,
-    QSpinBox, QPushButton, QGroupBox, QFormLayout, QTabWidget,
-    QSplitter
+    QLabel, QWidget, QVBoxLayout, QProgressBar, QHBoxLayout,
+    QComboBox, QSlider, QCheckBox, QSpinBox, QPushButton,
+    QGroupBox, QFormLayout, QTabWidget, QGraphicsRectItem
 )
-from PySide6.QtCore import Qt, QThreadPool, QRunnable, Signal
-from PySide6.QtGui import QImage, QAction, QKeySequence, QColor
-from PySide6.QtWidgets import QGraphicsRectItem
-from PySide6.QtWidgets import QGraphicsRectItem
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QImage, QAction, QKeySequence
 
 from ui.canvas_widget import CanvasWidget, Tool
 from ui.toolbar import ToolBar
@@ -23,6 +20,8 @@ class MainWindow(QMainWindow):
         self.resize(1400, 900)
 
         self._current_file_path = None
+        self._output_dir: str | None = None
+        self._psd_handler = None
         self._image_history: list[QImage] = []
         self._history_index = -1
         self._max_history = 20
@@ -299,6 +298,7 @@ class MainWindow(QMainWindow):
         try:
             from core.psd_handler import PSDHandler
             handler = PSDHandler(path)
+            self._psd_handler = handler
             composite = handler.get_composite()
             if composite:
                 self.canvas.load_pil_image(composite)
@@ -328,6 +328,7 @@ class MainWindow(QMainWindow):
             check = QCheckBox()
             check.setChecked(layer_info.get("visible", True))
             check.setProperty("layer_idx", layer_info["index"])
+            check.stateChanged.connect(self._on_layer_visibility_changed)
             row_layout.addWidget(check)
 
             name = QLabel(layer_info["name"])
@@ -343,6 +344,22 @@ class MainWindow(QMainWindow):
 
             self.layer_layout.addWidget(row)
 
+    def _on_layer_visibility_changed(self):
+        if self._psd_handler is None:
+            return
+        visible_indices = set()
+        for i in range(self.layer_layout.count()):
+            item = self.layer_layout.itemAt(i)
+            if item and item.widget():
+                check = item.widget().findChild(QCheckBox)
+                if check and check.isChecked():
+                    idx = check.property("layer_idx")
+                    if idx is not None:
+                        visible_indices.add(idx)
+        composite = self._psd_handler.get_visible_composite(visible_indices)
+        if composite:
+            self.canvas.load_pil_image(composite)
+
     def _preview_layer(self, handler, layer_idx):
         img = handler.get_layer_image(layer_idx)
         if img:
@@ -354,7 +371,7 @@ class MainWindow(QMainWindow):
             QMessageBox.information(self, "提示", "请先打开一个图片文件")
             return
 
-        img = self.canvas.get_current_image()
+        img = self.canvas.render_to_image()
         if not img:
             return
 
@@ -362,8 +379,13 @@ class MainWindow(QMainWindow):
         ext_map = {"PNG": ".png", "JPEG": ".jpg", "WebP": ".webp", "BMP": ".bmp", "TIFF": ".tiff", "ICO": ".ico"}
         default_name = os.path.splitext(os.path.basename(self._current_file_path))[0] + ext_map.get(fmt, ".png")
 
+        if self._output_dir:
+            default_path = os.path.join(self._output_dir, default_name)
+        else:
+            default_path = default_name
+
         save_path, _ = QFileDialog.getSaveFileName(
-            self, "导出图片", default_name,
+            self, "导出图片", default_path,
             f"{fmt} 文件 (*{ext_map.get(fmt, '')})"
         )
         if not save_path:
@@ -392,6 +414,7 @@ class MainWindow(QMainWindow):
     def _browse_output_dir(self):
         folder = QFileDialog.getExistingDirectory(self, "选择输出目录")
         if folder:
+            self._output_dir = folder
             self.output_path_label.setText(folder)
 
     def _open_batch(self):
@@ -403,11 +426,17 @@ class MainWindow(QMainWindow):
             QMessageBox.information(self, "提示", "批量转换功能正在开发中")
 
     def _open_batch_with_folder(self, folder):
-        self._open_batch()
+        try:
+            from ui.batch_panel import BatchDialog
+            dialog = BatchDialog(self)
+            dialog.add_folder(folder)
+            dialog.exec()
+        except ImportError:
+            QMessageBox.information(self, "提示", "批量转换功能正在开发中")
 
     def _apply_crop(self):
         for item in self.canvas._scene.items():
-            if isinstance(item, QGraphicsRectItem) and item is not self.canvas._pixmap_item:
+            if isinstance(item, QGraphicsRectItem) and item.data(0) == "crop":
                 rect = item.sceneBoundingRect()
                 self.canvas.apply_crop(rect)
                 self._push_history()

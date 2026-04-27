@@ -98,6 +98,27 @@ class CanvasWidget(QGraphicsView):
     def get_current_image(self) -> QImage | None:
         return self._current_image
 
+    def render_to_image(self) -> QImage | None:
+        """Render scene (base image + all overlays) into a single QImage."""
+        if self._current_image is None:
+            return None
+        has_overlays = any(
+            item is not self._pixmap_item
+            for item in self._scene.items()
+        )
+        if not has_overlays:
+            return self._current_image
+        rect = self._scene.sceneRect().toRect()
+        if rect.isEmpty():
+            return self._current_image
+        rendered = QImage(rect.size(), QImage.Format_RGBA8888)
+        rendered.fill(Qt.transparent)
+        painter = QPainter(rendered)
+        painter.setRenderHints(QPainter.Antialiasing | QPainter.SmoothPixmapTransform)
+        self._scene.render(painter, QRectF(rendered.rect()), rect)
+        painter.end()
+        return rendered
+
     def fit_in_view(self):
         if self._pixmap_item:
             self.fitInView(self._scene.sceneRect(), Qt.KeepAspectRatio)
@@ -177,6 +198,7 @@ class CanvasWidget(QGraphicsView):
             rect = QGraphicsRectItem(QRectF(pos, pos))
             rect.setPen(pen)
             rect.setBrush(QBrush(QColor(0, 150, 255, 30)))
+            rect.setData(0, "crop")
             self._scene.addItem(rect)
             self._temp_item = rect
 
