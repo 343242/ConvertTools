@@ -112,7 +112,7 @@ class ImageConverter:
     @staticmethod
     def get_output_dir(input_path: str) -> str:
         parent = os.path.dirname(input_path)
-        output_dir = os.path.join(parent, "converted")
+        output_dir = ImageConverter._join_path(parent, "converted")
         os.makedirs(output_dir, exist_ok=True)
         return output_dir
 
@@ -126,4 +126,10 @@ class ImageConverter:
             "BMP": ".bmp", "TIFF": ".tiff", "ICO": ".ico",
         }
         ext = ext_map.get(output_format.upper(), f".{output_format.lower()}")
-        return os.path.join(output_dir, name + ext)
+        return ImageConverter._join_path(output_dir, name + ext)
+
+    @staticmethod
+    def _join_path(parent: str, child: str) -> str:
+        if "/" in parent and "\\" not in parent:
+            return parent.rstrip("/") + "/" + child
+        return os.path.join(parent, child)

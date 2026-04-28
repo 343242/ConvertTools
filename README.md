@@ -68,6 +68,32 @@ uv sync
 
 ### 构建可执行文件
 
+推荐使用仓库里的 Windows 构建脚本。它会使用干净 PATH 构建，避免 Anaconda / MSYS2 / Git `usr\bin` 等环境中的 DLL 被误打进发布包，并在构建后自动验包：
+
+脚本路径：`scripts/build_windows.ps1`
+
+```powershell
+.\scripts\build_windows.ps1
+```
+
+构建脚本会在完成后调用：
+
+脚本路径：`scripts/verify_dist.ps1`
+
+```powershell
+.\scripts\verify_dist.ps1
+```
+
+验包会检查 `dist/ConvertTools/` 中是否出现已知污染 DLL（例如 `icu*.dll`），确认 Qt Windows 平台插件存在，并启动一次 `ConvertTools.exe` 检查 `%LOCALAPPDATA%\ConvertTools\startup-error.log` 是否生成。
+
+如需只验包不重新构建：
+
+```powershell
+.\scripts\verify_dist.ps1
+```
+
+也可以手动构建，但不推荐在复杂 Windows 环境下直接使用当前 shell 的 PATH：
+
 ```bash
 uv run pyinstaller ConvertTools.spec --noconfirm
 ```

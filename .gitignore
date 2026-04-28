@@ -9,3 +9,6 @@ build/
 .claude/
 .omx/
 .pytest_cache/
+.pytest-basetemp/
+.tmp-test/
+pytest-cache-files-*/

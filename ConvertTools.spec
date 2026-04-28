@@ -4,11 +4,13 @@ import sys
 from pathlib import Path
 
 import PySide6
+import shiboken6
 
 block_cipher = None
 
 ROOT = os.path.abspath('.')
 PYSIDE_DIR = Path(PySide6.__file__).resolve().parent
+SHIBOKEN_DIR = Path(shiboken6.__file__).resolve().parent
 MSVC_RUNTIME_DLLS = [
     'concrt140.dll',
     'msvcp140.dll',
@@ -20,10 +22,30 @@ MSVC_RUNTIME_DLLS = [
     'vcruntime140.dll',
     'vcruntime140_1.dll',
 ]
+SYSTEM_ICU_DLL_PREFIXES = ('icu',)
+
+
+def _is_system_icu_binary(binary_toc_entry):
+    dest_name = Path(binary_toc_entry[0]).name.lower()
+    src_name = Path(binary_toc_entry[1]).name.lower()
+    return (
+        dest_name.startswith(SYSTEM_ICU_DLL_PREFIXES)
+        and dest_name.endswith('.dll')
+    ) or (
+        src_name.startswith(SYSTEM_ICU_DLL_PREFIXES)
+        and src_name.endswith('.dll')
+    )
+
+
 extra_binaries = [
     (str(PYSIDE_DIR / dll_name), 'PySide6')
     for dll_name in MSVC_RUNTIME_DLLS
     if (PYSIDE_DIR / dll_name).exists()
+]
+# Co-locate shiboken6 DLL with PySide6 so Windows can resolve
+# the transitive dependency: QtWidgets.pyd -> pyside6.abi3.dll -> shiboken6.abi3.dll
+extra_binaries += [
+    (str(SHIBOKEN_DIR / 'shiboken6.abi3.dll'), 'PySide6'),
 ]
 
 a = Analysis(
@@ -55,6 +77,11 @@ a = Analysis(
     noarchive=False,
     cipher=block_cipher,
 )
+
+# Qt6Core on Windows can use the OS ICU DLLs from System32. PyInstaller may
+# accidentally collect Anaconda's ICU forwarder DLLs from PATH, and those break
+# PySide6 import at startup when they shadow the OS copies.
+a.binaries = [entry for entry in a.binaries if not _is_system_icu_binary(entry)]
 
 pyz = PYZ(a.pure, cipher=block_cipher)
 
