@@ -1,25 +1,17 @@
 # -*- mode: python ; coding: utf-8 -*-
 import os
 import sys
-from PyInstaller.utils.hooks import collect_all
 
 block_cipher = None
 
 ROOT = os.path.abspath('.')
-pyside_datas, pyside_binaries, pyside_hiddenimports = collect_all('PySide6')
-shiboken_datas, shiboken_binaries, shiboken_hiddenimports = collect_all('shiboken6')
 
 a = Analysis(
     ['main.py'],
     pathex=[os.path.join(ROOT, 'src')],
-    binaries=pyside_binaries + shiboken_binaries,
-    datas=pyside_datas + shiboken_datas,
+    binaries=[],
+    datas=[],
     hiddenimports=[
-        'PIL',
-        'PIL.Image',
-        'PIL.ImageEnhance',
-        'PIL.ImageFilter',
-        'PIL.ImageOps',
         'psd_tools',
         'psd_tools.api',
         'psd_tools.constants',
@@ -30,7 +22,7 @@ a = Analysis(
         'srcgen',
         'enum',
         'attr',
-    ] + pyside_hiddenimports + shiboken_hiddenimports,
+    ],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
@@ -39,9 +31,6 @@ a = Analysis(
         'pytest', 'pluggy', 'iniconfig', 'packaging', 'pygments',
         # Optional tooling
         'xmlrunner', 'ctypes.test',
-        # Misc unused
-        'tkinter', 'matplotlib', 'numpy', 'scipy', 'pandas',
-        'IPython', 'jupyter', 'notebook',
     ],
     noarchive=False,
     cipher=block_cipher,
