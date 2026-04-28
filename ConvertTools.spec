@@ -1,17 +1,24 @@
 # -*- mode: python ; coding: utf-8 -*-
 import os
 import sys
+from PyInstaller.utils.hooks import collect_data_files, collect_dynamic_libs
 
 block_cipher = None
 
 ROOT = os.path.abspath('.')
+qt_datas = collect_data_files('PySide6')
+qt_binaries = collect_dynamic_libs('PySide6') + collect_dynamic_libs('shiboken6')
 
 a = Analysis(
     ['main.py'],
     pathex=[os.path.join(ROOT, 'src')],
-    binaries=[],
-    datas=[],
+    binaries=qt_binaries,
+    datas=qt_datas,
     hiddenimports=[
+        'shiboken6',
+        'PySide6.QtCore',
+        'PySide6.QtGui',
+        'PySide6.QtWidgets',
         'PIL',
         'PIL.Image',
         'PIL.ImageEnhance',
@@ -36,16 +43,6 @@ a = Analysis(
         'pytest', 'pluggy', 'iniconfig', 'packaging', 'pygments',
         # Optional tooling
         'xmlrunner', 'ctypes.test',
-        # Unused Qt modules
-        'PySide6.QtNetwork', 'PySide6.QtSql', 'PySide6.QtTest',
-        'PySide6.QtXml', 'PySide6.QtBluetooth', 'PySide6.QtNfc',
-        'PySide6.QtPositioning', 'PySide6.QtLocation',
-        'PySide6.QtSensors', 'PySide6.QtSerialPort',
-        'PySide6.QtWebEngine', 'PySide6.QtWebSockets',
-        'PySide6.QtMultimedia', 'PySide6.QtMultimediaWidgets',
-        'PySide6.QtCharts', 'PySide6.QtDataVisualization',
-        'PySide6.QtQml', 'PySide6.QtQuick', 'PySide6.QtQuickWidgets',
-        'PySide6.Qt3D', 'PySide6.QtDesigner',
         # Misc unused
         'tkinter', 'matplotlib', 'numpy', 'scipy', 'pandas',
         'IPython', 'jupyter', 'notebook',
@@ -65,7 +62,7 @@ exe = EXE(
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
-    upx=True,
+    upx=False,
     console=False,
     icon=None,
 )
@@ -75,6 +72,6 @@ coll = COLLECT(
     a.binaries,
     a.datas,
     strip=False,
-    upx=True,
+    upx=False,
     name='ConvertTools',
 )
