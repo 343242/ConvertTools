@@ -49,10 +49,10 @@ def test_configure_windows_dll_search_paths_adds_runtime_dirs(monkeypatch, tmp_p
     (base / "shiboken6").mkdir(parents=True)
 
     added_dirs = []
+    monkeypatch.setenv("PATH", r"C:\Windows\System32")
 
     monkeypatch.setattr(main, "_is_windows", lambda: True)
-    monkeypatch.setattr(main.sys, "frozen", True, raising=False)
-    monkeypatch.setattr(main.sys, "_MEIPASS", str(base), raising=False)
+    monkeypatch.setattr(main, "_runtime_base_dir", lambda: base)
     monkeypatch.setattr(main.os, "add_dll_directory", lambda path: added_dirs.append(path) or path, raising=False)
     main._DLL_DIR_HANDLES.clear()
 
@@ -62,3 +62,7 @@ def test_configure_windows_dll_search_paths_adds_runtime_dirs(monkeypatch, tmp_p
     assert base in normalized
     assert base / "PySide6" in normalized
     assert base / "shiboken6" in normalized
+    path_parts = os.environ["PATH"].split(os.pathsep)
+    assert str(base) in path_parts
+    assert str(base / "PySide6") in path_parts
+    assert str(base / "shiboken6") in path_parts

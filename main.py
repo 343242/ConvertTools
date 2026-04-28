@@ -12,15 +12,17 @@ def _is_windows() -> bool:
     return os.name == "nt"
 
 
+def _runtime_base_dir() -> Path:
+    if getattr(sys, "frozen", False):
+        return Path(getattr(sys, "_MEIPASS", Path(sys.executable).resolve().parent))
+    return Path(__file__).resolve().parent
+
+
 def _configure_windows_dll_search_paths():
-    if not _is_windows() or not hasattr(os, "add_dll_directory"):
+    if not _is_windows():
         return
 
-    if getattr(sys, "frozen", False):
-        base_dir = Path(getattr(sys, "_MEIPASS", Path(sys.executable).resolve().parent))
-    else:
-        base_dir = Path(__file__).resolve().parent
-
+    base_dir = _runtime_base_dir()
     candidate_dirs = [
         base_dir,
         base_dir / "PySide6",
@@ -30,14 +32,17 @@ def _configure_windows_dll_search_paths():
         base_dir / "_internal" / "shiboken6",
     ]
 
-    for directory in candidate_dirs:
-        if directory.is_dir():
-            _DLL_DIR_HANDLES.append(os.add_dll_directory(str(directory)))
+    existing_dirs = [str(directory) for directory in candidate_dirs if directory.is_dir()]
+    if existing_dirs:
+        existing_path = os.environ.get("PATH", "")
+        os.environ["PATH"] = os.pathsep.join(existing_dirs + ([existing_path] if existing_path else []))
+
+    if hasattr(os, "add_dll_directory"):
+        for directory in existing_dirs:
+            _DLL_DIR_HANDLES.append(os.add_dll_directory(directory))
 
 
 _configure_windows_dll_search_paths()
-
-from app import Application
 
 
 def _error_log_path() -> Path:
@@ -70,6 +75,8 @@ def _show_startup_error(log_path: Path, exc: BaseException):
 
 def main():
     try:
+        from app import Application
+
         app = Application(sys.argv)
         sys.exit(app.run())
     except Exception as exc:
