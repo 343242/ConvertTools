@@ -5,12 +5,39 @@ import traceback
 from pathlib import Path
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "src"))
-
-from app import Application
+_DLL_DIR_HANDLES = []
 
 
 def _is_windows() -> bool:
     return os.name == "nt"
+
+
+def _configure_windows_dll_search_paths():
+    if not _is_windows() or not hasattr(os, "add_dll_directory"):
+        return
+
+    if getattr(sys, "frozen", False):
+        base_dir = Path(getattr(sys, "_MEIPASS", Path(sys.executable).resolve().parent))
+    else:
+        base_dir = Path(__file__).resolve().parent
+
+    candidate_dirs = [
+        base_dir,
+        base_dir / "PySide6",
+        base_dir / "shiboken6",
+        base_dir / "_internal",
+        base_dir / "_internal" / "PySide6",
+        base_dir / "_internal" / "shiboken6",
+    ]
+
+    for directory in candidate_dirs:
+        if directory.is_dir():
+            _DLL_DIR_HANDLES.append(os.add_dll_directory(str(directory)))
+
+
+_configure_windows_dll_search_paths()
+
+from app import Application
 
 
 def _error_log_path() -> Path:
