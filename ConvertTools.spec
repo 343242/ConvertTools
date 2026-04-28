@@ -1,24 +1,20 @@
 # -*- mode: python ; coding: utf-8 -*-
 import os
 import sys
-from PyInstaller.utils.hooks import collect_data_files, collect_dynamic_libs
+from PyInstaller.utils.hooks import collect_all
 
 block_cipher = None
 
 ROOT = os.path.abspath('.')
-qt_datas = collect_data_files('PySide6')
-qt_binaries = collect_dynamic_libs('PySide6') + collect_dynamic_libs('shiboken6')
+pyside_datas, pyside_binaries, pyside_hiddenimports = collect_all('PySide6')
+shiboken_datas, shiboken_binaries, shiboken_hiddenimports = collect_all('shiboken6')
 
 a = Analysis(
     ['main.py'],
     pathex=[os.path.join(ROOT, 'src')],
-    binaries=qt_binaries,
-    datas=qt_datas,
+    binaries=pyside_binaries + shiboken_binaries,
+    datas=pyside_datas + shiboken_datas,
     hiddenimports=[
-        'shiboken6',
-        'PySide6.QtCore',
-        'PySide6.QtGui',
-        'PySide6.QtWidgets',
         'PIL',
         'PIL.Image',
         'PIL.ImageEnhance',
@@ -34,7 +30,7 @@ a = Analysis(
         'srcgen',
         'enum',
         'attr',
-    ],
+    ] + pyside_hiddenimports + shiboken_hiddenimports,
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
